@@ -73,7 +73,7 @@ Output:
             return result;
         }
 
-        public CodeDirectoryHeader Read(ReadOnlySpan<byte> buffer, bool isLittleEndian, out int bytesRead)
+        public static CodeDirectoryHeader Read(ReadOnlySpan<byte> buffer, bool isLittleEndian, out int bytesRead)
         {
             return isLittleEndian ? ReadLittleEndian(buffer, out bytesRead) : ReadBigEndian(buffer, out bytesRead);
         }

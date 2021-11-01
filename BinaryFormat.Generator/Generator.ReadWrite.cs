@@ -76,7 +76,7 @@ namespace BinaryFormat
                 stringBuilder.AppendLine();
                 GenerateReadMethod(context, typeDecl, semanticModel, stringBuilder, "BigEndian", "BigEndian", fieldsAndProps);
                 stringBuilder.AppendLine();
-                stringBuilder.AppendLine($"        public {typeDecl.Identifier} Read(ReadOnlySpan<byte> buffer, bool isLittleEndian, out int bytesRead)");
+                stringBuilder.AppendLine($"        public static {typeDecl.Identifier} Read(ReadOnlySpan<byte> buffer, bool isLittleEndian, out int bytesRead)");
                 stringBuilder.AppendLine($"        {{");
                 stringBuilder.AppendLine($"            return isLittleEndian ? ReadLittleEndian(buffer, out bytesRead) : ReadBigEndian(buffer, out bytesRead);");
                 stringBuilder.AppendLine($"        }}");
