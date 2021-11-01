@@ -100,6 +100,15 @@ namespace BinaryFormat
             {
                 var memberType = m.Type;
                 string? readExpression;
+                string castExpression = "";
+
+                if (memberType.TypeKind == TypeKind.Enum &&
+                    memberType is INamedTypeSymbol nts)
+                {
+                    // FIXME: Namespace
+                    castExpression = $"({memberType.Name})";
+                    memberType = nts.EnumUnderlyingType;
+                }
 
                 switch (memberType.SpecialType)
                 {
@@ -130,18 +139,17 @@ namespace BinaryFormat
                             SpecialType.System_Int64 => 8,
                             _ => 0
                         };
-                        readExpression = $"BinaryPrimitives.Read{basicTypeName}{endianSuffix}(buffer.Slice({offset}{variableOffset}, {basicTypeSize}))";
+                        readExpression = $"{castExpression}BinaryPrimitives.Read{basicTypeName}{endianSuffix}(buffer.Slice({offset}{variableOffset}, {basicTypeSize}))";
                         offset += basicTypeSize;
                         break;
 
                     case SpecialType.System_Byte:
-                        readExpression = $"buffer[{offset}{variableOffset}]";
+                        readExpression = $"{castExpression}buffer[{offset}{variableOffset}]";
                         offset ++;
                         break;
 
                     default:
                         var methods = memberType.GetMembers().OfType<IMethodSymbol>();
-
                         if (methods.Any(m => m.Name == $"Read{nameSuffix}"))
                         {
                             // FIXME: Missing namespace
