@@ -28,6 +28,20 @@ namespace BinaryFormat.Test
             Assert.Equal(2, sbc.B);
             Assert.Equal(4, sbc.C);
         }
+
+        [Fact]
+        void NestedRoundtrip()
+        {
+            var inputBuffer = new byte[] {
+                    (byte)'N', (byte)'M', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    1, 0, 0, 0, 2, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0
+                };
+            var sbc = NestedBinaryClass.Read(inputBuffer, out int bytesRead);
+            var buffer = new byte[100];
+            sbc.Write(buffer, out var bytesWritten);
+            Assert.Equal(inputBuffer.Length, bytesRead);
+            Assert.Equal(inputBuffer, buffer.AsSpan(0, bytesRead).ToArray());
+        }
     }
 
     [GenerateReaderWriter]
@@ -62,10 +76,18 @@ namespace BinaryFormat.Test
             bytesRead = 16;
             return new MachSymbolName
             {
-	            Name = Encoding.UTF8.GetString(buffer.Slice(0, 16)).TrimEnd('\0'),
+                Name = Encoding.UTF8.GetString(buffer.Slice(0, 16)).TrimEnd('\0'),
             };
         }
 
-	    public string Name { get; set; }
+        public void Write(Span<byte> buffer, out int bytesWritten)
+        {
+            byte[] utf8Name = new byte[16];
+            Encoding.UTF8.GetBytes(Name, utf8Name);
+            utf8Name.CopyTo(buffer.Slice(0, 16));
+            bytesWritten = 16;
+        }
+
+        public string Name { get; set; }
     }
 }

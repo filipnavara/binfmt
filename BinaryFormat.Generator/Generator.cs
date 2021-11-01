@@ -28,32 +28,11 @@ namespace BinaryFormat
         
         public void Execute(GeneratorExecutionContext context)
         {
-            try
-            {
-                ExecuteInternal(context);
-            }
-            catch (Exception e)
-            {
-                //This is temporary till https://github.com/dotnet/roslyn/issues/46084 is fixed
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "SI0000",
-                        "An exception was thrown by the StrongInject generator",
-                        "An exception was thrown by the StrongInject generator: '{0}'",
-                        "StrongInject",
-                        DiagnosticSeverity.Error,
-                        isEnabledByDefault: true),
-                    Location.None,
-                    e.ToString().Replace("\n", "")));
-            }
-        }
-        public void ExecuteInternal(GeneratorExecutionContext context)
-        {
             MySyntaxReceiver syntaxReceiver = (MySyntaxReceiver)context.SyntaxContextReceiver;
 
             foreach (var userType in syntaxReceiver.TypesToAugment)
             {
-                GenerateReader(context, userType, context.Compilation.GetSemanticModel(userType.SyntaxTree));
+                GenerateReaderWriter(context, userType, context.Compilation.GetSemanticModel(userType.SyntaxTree));
             }
         }
 

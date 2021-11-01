@@ -5,14 +5,12 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
-using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace BinaryFormat
 {
     public partial class Generator : ISourceGenerator
     {
-        private void GenerateReader(
+        private void GenerateReaderWriter(
             GeneratorExecutionContext context,
             TypeDeclarationSyntax typeDecl,
             SemanticModel semanticModel)
@@ -60,22 +58,30 @@ namespace BinaryFormat
             if (hasLittleEndianAttribute && !hasBigEndianAttribute)
             {
                 GenerateReadMethod(context, typeDecl, semanticModel, stringBuilder, "", "LittleEndian", fieldsAndProps);
+                stringBuilder.AppendLine();
+                GenerateWriteMethod(context, typeDecl, semanticModel, stringBuilder, "", "LittleEndian", fieldsAndProps);
             }
             else if (hasBigEndianAttribute && !hasLittleEndianAttribute)
             {
                 GenerateReadMethod(context, typeDecl, semanticModel, stringBuilder, "", "BigEndian", fieldsAndProps);
+                stringBuilder.AppendLine();
+                GenerateWriteMethod(context, typeDecl, semanticModel, stringBuilder, "", "BigEndian", fieldsAndProps);
             }
             else
             {
                 GenerateReadMethod(context, typeDecl, semanticModel, stringBuilder, "LittleEndian", "LittleEndian", fieldsAndProps);
                 stringBuilder.AppendLine();
                 GenerateReadMethod(context, typeDecl, semanticModel, stringBuilder, "BigEndian", "BigEndian", fieldsAndProps);
+                stringBuilder.AppendLine();
+                GenerateWriteMethod(context, typeDecl, semanticModel, stringBuilder, "LittleEndian", "LittleEndian", fieldsAndProps);
+                stringBuilder.AppendLine();
+                GenerateWriteMethod(context, typeDecl, semanticModel, stringBuilder, "BigEndian", "BigEndian", fieldsAndProps);
             }
 
             stringBuilder.AppendLine($"    }}");
             stringBuilder.AppendLine($"}}");
 
-            context.AddSource($"{containerSymbol.Name}.Reader.Generated.cs", stringBuilder.ToString());
+            context.AddSource($"{containerSymbol.Name}.Generated.cs", stringBuilder.ToString());
         }
 
         private void GenerateReadMethod(
@@ -176,6 +182,103 @@ namespace BinaryFormat
             stringBuilder.AppendLine($"            }};");
             stringBuilder.AppendLine($"            bytesRead = {offset}{variableOffset};");
             stringBuilder.AppendLine($"            return result;");
+            stringBuilder.AppendLine($"        }}");
+        }
+
+        private void GenerateWriteMethod(
+            GeneratorExecutionContext context,
+            TypeDeclarationSyntax typeDecl,
+            SemanticModel semanticModel,
+            StringBuilder stringBuilder,
+            string nameSuffix,
+            string endianSuffix,
+            List<DataMemberSymbol> fieldsAndProps)
+        {
+            int offset = 0;
+            StringBuilder variableOffset = new StringBuilder();
+            int variableOffsetIndex = 1;
+
+            stringBuilder.AppendLine($"        public void Write{nameSuffix}(Span<byte> buffer, out int bytesWritten)");
+            stringBuilder.AppendLine($"        {{");
+
+            foreach (var m in fieldsAndProps)
+            {
+                var memberType = m.Type;
+                string? writeExpression;
+                string castExpression = "";
+
+                if (memberType.TypeKind == TypeKind.Enum &&
+                    memberType is INamedTypeSymbol nts)
+                {
+                    // FIXME: Namespace
+                    memberType = nts.EnumUnderlyingType;
+                    castExpression = $"({memberType.Name})";
+                }
+
+                switch (memberType.SpecialType)
+                {
+                    // Endianness aware basic types
+                    case SpecialType.System_UInt16:
+                    case SpecialType.System_UInt32:
+                    case SpecialType.System_UInt64:
+                    case SpecialType.System_Int16:
+                    case SpecialType.System_Int32:
+                    case SpecialType.System_Int64:
+                        string? basicTypeName = memberType.SpecialType switch
+                        {
+                            SpecialType.System_UInt16 => "UInt16",
+                            SpecialType.System_UInt32 => "UInt32",
+                            SpecialType.System_UInt64 => "UInt64",
+                            SpecialType.System_Int16 => "Int16",
+                            SpecialType.System_Int32 => "Int32",
+                            SpecialType.System_Int64 => "Int64",
+                            _ => throw new InvalidOperationException()
+                        };
+                        int basicTypeSize = memberType.SpecialType switch
+                        {
+                            SpecialType.System_UInt16 => 2,
+                            SpecialType.System_UInt32 => 4,
+                            SpecialType.System_UInt64 => 8,
+                            SpecialType.System_Int16 => 2,
+                            SpecialType.System_Int32 => 4,
+                            SpecialType.System_Int64 => 8,
+                            _ => 0
+                        };
+                        writeExpression = $"BinaryPrimitives.Write{basicTypeName}{endianSuffix}(buffer.Slice({offset}{variableOffset}, {basicTypeSize}), {castExpression}{m.Name})";
+                        offset += basicTypeSize;
+                        break;
+
+                    case SpecialType.System_Byte:
+                        writeExpression = $"buffer[{offset}{variableOffset}] = {castExpression}{m.Name}";
+                        offset ++;
+                        break;
+
+                    default:
+                        var methods = memberType.GetMembers().OfType<IMethodSymbol>();
+                        if (methods.Any(m => m.Name == $"Write{nameSuffix}"))
+                        {
+                            // FIXME: Missing namespace
+                            writeExpression = $"{m.Name}.Write{nameSuffix}(buffer.Slice({offset}{variableOffset}), out var _{variableOffsetIndex})";
+                        }
+                        else
+                        {
+                            // FIXME: Missing namespace
+                            writeExpression = $"{m.Name}.Write(buffer.Slice({offset}{variableOffset}), out var _{variableOffsetIndex})";
+                        }
+
+                        variableOffset.Append($" + _{variableOffsetIndex}");
+                        variableOffsetIndex++;
+
+                        // FIXME: Handle other basic type
+                        // FIXME: Handle nested struct/classes by calling their Read
+                        //throw new NotSupportedException();
+                        break;
+                }
+
+                stringBuilder.AppendLine($"            {writeExpression};");
+            }
+
+            stringBuilder.AppendLine($"            bytesWritten = {offset}{variableOffset};");
             stringBuilder.AppendLine($"        }}");
         }
     }
