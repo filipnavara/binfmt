@@ -151,7 +151,13 @@ namespace BinaryFormat
                         break;
 
                     default:
-                        // TODO: Handle nested types that have BinarySize
+                        var binarySizeField = memberType.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => f.Name == "BinarySize");
+                        if (binarySizeField != null && binarySizeField.ConstantValue is int binarySize)
+                        {
+                            // Handle nested types that have `const int BinarySize`
+                            size += binarySize;
+                            break;
+                        }
                         return;
                 }
             }

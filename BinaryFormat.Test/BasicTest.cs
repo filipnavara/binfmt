@@ -71,6 +71,8 @@ namespace BinaryFormat.Test
     /// </remarks>
     public class MachSymbolName
     {
+        public const int BinarySize = 16;
+
         public static MachSymbolName Read(ReadOnlySpan<byte> buffer, out int bytesRead)
         {
             bytesRead = 16;
