@@ -52,7 +52,7 @@ namespace BinaryFormat
             // FIXME: modifiers, class/struct/record
             stringBuilder.AppendLine($"using System.Buffers.Binary;");
             stringBuilder.AppendLine($"");
-            stringBuilder.AppendLine($"namespace {containerSymbol.ContainingNamespace.Name}");
+            stringBuilder.AppendLine($"namespace {containerSymbol.ContainingNamespace}");
             stringBuilder.AppendLine($"{{");
             stringBuilder.AppendLine($"    public partial {classOrStruct} {typeDecl.Identifier}");
             stringBuilder.AppendLine($"    {{");
