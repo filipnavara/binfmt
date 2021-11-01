@@ -55,6 +55,9 @@ namespace BinaryFormat
             stringBuilder.AppendLine($"    public partial {classOrStruct} {typeDecl.Identifier}");
             stringBuilder.AppendLine($"    {{");
 
+            // Try to generate the static size constant
+            GenerateBinarySize(context, typeDecl, semanticModel, stringBuilder, fieldsAndProps);
+
             if (hasLittleEndianAttribute && !hasBigEndianAttribute)
             {
                 GenerateReadMethod(context, typeDecl, semanticModel, stringBuilder, "", "LittleEndian", fieldsAndProps);
@@ -73,15 +76,88 @@ namespace BinaryFormat
                 stringBuilder.AppendLine();
                 GenerateReadMethod(context, typeDecl, semanticModel, stringBuilder, "BigEndian", "BigEndian", fieldsAndProps);
                 stringBuilder.AppendLine();
+                stringBuilder.AppendLine($"        public {typeDecl.Identifier} Read(ReadOnlySpan<byte> buffer, bool isLittleEndian, out int bytesRead)");
+                stringBuilder.AppendLine($"        {{");
+                stringBuilder.AppendLine($"            return isLittleEndian ? ReadLittleEndian(buffer, out bytesRead) : ReadBigEndian(buffer, out bytesRead);");
+                stringBuilder.AppendLine($"        }}");
+                stringBuilder.AppendLine();
                 GenerateWriteMethod(context, typeDecl, semanticModel, stringBuilder, "LittleEndian", "LittleEndian", fieldsAndProps);
                 stringBuilder.AppendLine();
                 GenerateWriteMethod(context, typeDecl, semanticModel, stringBuilder, "BigEndian", "BigEndian", fieldsAndProps);
+                stringBuilder.AppendLine();
+                stringBuilder.AppendLine($"        public void Write(Span<byte> buffer, bool isLittleEndian, out int bytesWritten)");
+                stringBuilder.AppendLine($"        {{");
+                stringBuilder.AppendLine($"            if (isLittleEndian)");
+                stringBuilder.AppendLine($"            {{");
+                stringBuilder.AppendLine($"                WriteLittleEndian(buffer, out bytesWritten);");
+                stringBuilder.AppendLine($"            }}");
+                stringBuilder.AppendLine($"            else");
+                stringBuilder.AppendLine($"            {{");
+                stringBuilder.AppendLine($"                WriteBigEndian(buffer, out bytesWritten);");
+                stringBuilder.AppendLine($"            }}");
+                stringBuilder.AppendLine($"        }}");
             }
 
             stringBuilder.AppendLine($"    }}");
             stringBuilder.AppendLine($"}}");
 
             context.AddSource($"{containerSymbol.Name}.Generated.cs", stringBuilder.ToString());
+        }
+
+        private void GenerateBinarySize(
+            GeneratorExecutionContext context,
+            TypeDeclarationSyntax typeDecl,
+            SemanticModel semanticModel,
+            StringBuilder stringBuilder,
+            List<DataMemberSymbol> fieldsAndProps)
+        {
+            int size = 0;
+            //StringBuilder variableOffset = new StringBuilder();
+            //int variableOffsetIndex = 1;
+
+            foreach (var m in fieldsAndProps)
+            {
+                var memberType = m.Type;
+
+                if (memberType.TypeKind == TypeKind.Enum &&
+                    memberType is INamedTypeSymbol nts)
+                {
+                    memberType = nts.EnumUnderlyingType;
+                }
+
+                switch (memberType.SpecialType)
+                {
+                    case SpecialType.System_UInt16:
+                    case SpecialType.System_UInt32:
+                    case SpecialType.System_UInt64:
+                    case SpecialType.System_Int16:
+                    case SpecialType.System_Int32:
+                    case SpecialType.System_Int64:
+                        int basicTypeSize = memberType.SpecialType switch
+                        {
+                            SpecialType.System_UInt16 => 2,
+                            SpecialType.System_UInt32 => 4,
+                            SpecialType.System_UInt64 => 8,
+                            SpecialType.System_Int16 => 2,
+                            SpecialType.System_Int32 => 4,
+                            SpecialType.System_Int64 => 8,
+                            _ => 0
+                        };
+                        size += basicTypeSize;
+                        break;
+
+                    case SpecialType.System_Byte:
+                        size++;
+                        break;
+
+                    default:
+                        // TODO: Handle nested types that have BinarySize
+                        return;
+                }
+            }
+
+            stringBuilder.AppendLine($"        public const int BinarySize = {size};");
+            stringBuilder.AppendLine();
         }
 
         private void GenerateReadMethod(

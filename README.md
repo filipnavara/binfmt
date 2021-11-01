@@ -25,6 +25,8 @@ Output:
 ```csharp
     public partial class CodeDirectoryHeader
     {
+        public const int BinarySize = 44;
+
         public static CodeDirectoryHeader ReadLittleEndian(ReadOnlySpan<byte> buffer, out int bytesRead)
         {
             var result = new CodeDirectoryHeader
@@ -71,6 +73,11 @@ Output:
             return result;
         }
 
+        public CodeDirectoryHeader Read(ReadOnlySpan<byte> buffer, bool isLittleEndian, out int bytesRead)
+        {
+            return isLittleEndian ? ReadLittleEndian(buffer, out bytesRead) : ReadBigEndian(buffer, out bytesRead);
+        }
+
         public void WriteLittleEndian(Span<byte> buffer, out int bytesWritten)
         {
             BinaryPrimitives.WriteUInt32LittleEndian(buffer.Slice(0, 4), Magic);
@@ -107,6 +114,18 @@ Output:
             buffer[39] = Log2PageSize;
             BinaryPrimitives.WriteUInt32BigEndian(buffer.Slice(40, 4), Reserved);
             bytesWritten = 44;
+        }
+
+        public void Write(Span<byte> buffer, bool isLittleEndian, out int bytesWritten)
+        {
+            if (isLittleEndian)
+            {
+                WriteLittleEndian(buffer, out bytesWritten);
+            }
+            else
+            {
+                WriteBigEndian(buffer, out bytesWritten);
+            }
         }
     }
 ```
